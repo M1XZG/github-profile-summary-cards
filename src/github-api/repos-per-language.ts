@@ -65,7 +65,6 @@ export async function getRepoLanguages(username: string, exclude: Array<string>)
     let hasNextPage = true;
     let cursor = null;
     const repoLanguages = new RepoLanguages();
-    const nodes = [];
 
     while (hasNextPage) {
         const res: any = await fetcher(process.env.GITHUB_TOKEN!, {
@@ -78,18 +77,17 @@ export async function getRepoLanguages(username: string, exclude: Array<string>)
         }
         cursor = res.data.data.user.repositories.pageInfo.endCursor;
         hasNextPage = res.data.data.user.repositories.pageInfo.hasNextPage;
-        nodes.push(...res.data.data.user.repositories.nodes);
-    }
-
-    nodes.forEach(node => {
-        if (node.primaryLanguage) {
-            const langName = node.primaryLanguage.name;
-            const langColor = node.primaryLanguage.color;
-            if (!exclude.includes(langName.toLowerCase())) {
-                repoLanguages.addLanguage(langName, langColor);
+        // Process page immediately to reduce memory footprint
+        res.data.data.user.repositories.nodes.forEach((node: any) => {
+            if (node.primaryLanguage) {
+                const langName: string = node.primaryLanguage.name;
+                const langColor: string = node.primaryLanguage.color;
+                if (exclude.indexOf(langName.toLowerCase()) === -1) {
+                    repoLanguages.addLanguage(langName, langColor);
+                }
             }
-        }
-    });
+        });
+    }
 
     return repoLanguages;
 }

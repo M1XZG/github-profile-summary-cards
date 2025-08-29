@@ -25,7 +25,7 @@ export function createDetailCard(
         .data(userDetails)
         .enter()
         .append('g')
-        .attr('transform', d => {
+        .attr('transform', (d: {index: number}) => {
             const y = labelHeight * d.index * 2;
             return `translate(0,${y})`;
         })
@@ -40,11 +40,11 @@ export function createDetailCard(
         .data(userDetails)
         .enter()
         .append('text')
-        .text(d => {
+        .text((d: {value: string}) => {
             return d.value;
         })
         .attr('x', labelHeight * 1.5)
-        .attr('y', d => labelHeight * d.index * 2 + labelHeight)
+        .attr('y', (d: {index: number}) => labelHeight * d.index * 2 + labelHeight)
         .style('fill', theme.text)
         .style('font-size', `${labelHeight}px`);
 

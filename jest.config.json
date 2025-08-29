@@ -8,5 +8,10 @@
     "setupFilesAfterEnv": [],
     "testMatch": ["**/*.test.ts"],
     "verbose": true,
-    "collectCoverageFrom": ["**/*.{ts,jx}", "!**/node_modules/**", "!**/dist/**, !**/lib/**"]
+    "collectCoverageFrom": [
+        "**/*.{ts,tsx}",
+        "!**/node_modules/**",
+        "!**/dist/**",
+        "!**/lib/**"
+    ]
 }

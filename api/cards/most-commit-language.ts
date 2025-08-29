@@ -2,6 +2,7 @@ import {getCommitsLanguageSVGWithThemeName} from '../../src/cards/most-commit-la
 import {changToNextGitHubToken} from '../utils/github-token-updater';
 import {getErrorMsgCard} from '../utils/error-card';
 import {translateLanguage} from '../../src/utils/translator';
+import {ThemeMap} from '../../src/const/theme';
 import type {VercelRequest, VercelResponse} from '@vercel/node';
 
 export default async (req: VercelRequest, res: VercelResponse) => {
@@ -19,8 +20,12 @@ export default async (req: VercelRequest, res: VercelResponse) => {
         res.status(400).send('exclude must be a string');
         return;
     }
-    let excludeArr = <string[]>[];
-    exclude.split(',').forEach(function (val) {
+    if (!ThemeMap.has(theme)) {
+        res.status(400).send('theme not found');
+        return;
+    }
+    let excludeArr: string[] = [];
+    exclude.split(',').forEach(function (val: string) {
         const translatedLanguage = translateLanguage(val);
         excludeArr.push(translatedLanguage.toLowerCase());
     });
@@ -31,6 +36,7 @@ export default async (req: VercelRequest, res: VercelResponse) => {
             try {
                 const cardSVG = await getCommitsLanguageSVGWithThemeName(username, theme, excludeArr);
                 res.setHeader('Content-Type', 'image/svg+xml');
+                res.setHeader('Cache-Control', 'public, max-age=300');
                 res.send(cardSVG);
                 return;
             } catch (err: any) {

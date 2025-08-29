@@ -83,7 +83,7 @@ export async function getCommitLanguage(username: string, exclude: Array<string>
             const langName = node.repository.primaryLanguage.name;
             const langColor = node.repository.primaryLanguage.color;
             const totalCount = node.contributions.totalCount;
-            if (!exclude.includes(langName.toLowerCase())) {
+            if (exclude.indexOf(langName.toLowerCase()) === -1) {
                 commitLanguages.addLanguageCount(langName, langColor, totalCount);
             }
         }

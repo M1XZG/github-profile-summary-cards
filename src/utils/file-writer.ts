@@ -19,7 +19,7 @@ export const writeSVG = function (folder: string, filename: string, svgString: s
 
 function getAllFileInFolder(folder: string): string[] {
     const files: string[] = [];
-    readdirSync(folder).forEach(file => {
+    readdirSync(folder).forEach((file: string) => {
         files.push(file);
     });
     return files;
@@ -67,7 +67,7 @@ ${getThemeMarkdown(`${urlPrefix}/${themeName}`)}
     themePreviewMarkdown += `\n`;
     themePreviewMarkdown += `### Each card usage`;
     for (const file of getAllFileInFolder(OUTPUT_PATH + themeName)) {
-        if (!file.endsWith('svg')) continue;
+        if (!file.endsWith('.svg')) continue;
         themePreviewMarkdown += `
 ---
 

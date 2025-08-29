@@ -34,7 +34,7 @@ const fetcher = (token: string, variables: any) => {
         },
         {
             query: `
-      query ProductiveTime($login: String!,$userId: ID!,$until: GitTimestamp!,,$since: GitTimestamp!) {
+      query ProductiveTime($login: String!, $userId: ID!, $until: GitTimestamp!, $since: GitTimestamp!) {
         user(login: $login) {
           contributionsCollection{
             commitContributionsByRepository(maxRepositories:50) {
@@ -90,7 +90,7 @@ export async function getProductiveTime(username: string, until: string, since: 
         throw Error(res.data.errors[0].message || 'GetProductiveTime failed');
     }
 
-    const productiveTime = new ProfuctiveTime();
+  const productiveTime = new ProfuctiveTime();
     res.data.data.user.contributionsCollection.commitContributionsByRepository.forEach(
         (node: {
             repository: {
@@ -98,8 +98,9 @@ export async function getProductiveTime(username: string, until: string, since: 
             };
         }) => {
             if (node.repository.defaultBranchRef != null) {
-                node.repository.defaultBranchRef.target.history.edges.forEach(node => {
-                    productiveTime.addProductiveDate(node.node.committedDate);
+        node.repository.defaultBranchRef.target.history.edges.forEach(edge => {
+          // Ensure type Date is stored
+          productiveTime.addProductiveDate(new Date(edge.node.committedDate));
                 });
             }
         }

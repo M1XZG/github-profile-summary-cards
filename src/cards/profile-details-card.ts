@@ -60,18 +60,13 @@ const getProfileDetailsData = async function (
     username: string
 ): Promise<[ProfileDetails, {index: number; icon: string; name: string; value: string}[]]> {
     const profileDetails = await getProfileDetails(username);
-    let totalContributions = 0;
-    if (process.env.VERCEL) {
-        // If running on vercel, we only calculate for last 1 year to avoid hobby timeout limit
-        profileDetails.contributionYears = profileDetails.contributionYears.slice(0, 1);
-        for (const year of profileDetails.contributionYears) {
-            totalContributions += (await getContributionByYear(username, year)).totalContributions;
-        }
-    } else {
-        for (const year of profileDetails.contributionYears) {
-            totalContributions += (await getContributionByYear(username, year)).totalContributions;
-        }
-    }
+    const years = process.env.VERCEL
+        ? profileDetails.contributionYears.slice(0, 1)
+        : profileDetails.contributionYears;
+    const totals = await Promise.all(
+        years.map(async year => (await getContributionByYear(username, year)).totalContributions)
+    );
+    const totalContributions = totals.reduce((a, b) => a + b, 0);
 
     const userDetails: {index: number; icon: string; name: string; value: string}[] = [
         // If running on vercel, we only display for last 1 year contributions count

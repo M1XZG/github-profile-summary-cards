@@ -1,4 +1,4 @@
-export const translateLanguage = function async(lang: string) {
+export const translateLanguage = function translate(lang: string) {
     // this is a list of all Github supported languages
     // that have known aliases
     // aliases with non URL safe characters have been removed

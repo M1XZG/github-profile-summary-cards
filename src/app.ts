@@ -12,12 +12,16 @@ const execCmd = (cmd: string, args: string[] = []) =>
     new Promise((resolve, reject) => {
         const app = spawn(cmd, args, {stdio: 'pipe'});
         let stdout = '';
-        app.stdout.on('data', data => {
-            stdout = data;
+        let stderr = '';
+        app.stdout.on('data', (data: any) => {
+            stdout += data.toString();
         });
-        app.on('close', code => {
-            if (code !== 0 && !stdout.includes('nothing to commit')) {
-                const err = new Error(`${cmd} ${args} \n ${stdout} \n Invalid status code: ${code}`);
+        app.stderr.on('data', (data: any) => {
+            stderr += data.toString();
+        });
+        app.on('close', (code: any) => {
+            if (code !== 0) {
+                const err = new Error(`${cmd} ${args.join(' ')}\nstdout: ${stdout}\nstderr: ${stderr}\nexit: ${code}`);
                 return reject(err);
             }
             return resolve(code);
@@ -27,10 +31,17 @@ const execCmd = (cmd: string, args: string[] = []) =>
 
 // ProfileSummaryCardsTemplate
 const commitFile = async () => {
-    await execCmd('git', ['config', '--global', 'user.email', 'profile-summary-cards-bot@example.com']);
-    await execCmd('git', ['config', '--global', 'user.name', 'profile-summary-cards[bot]']);
+    await execCmd('git', ['config', '--local', 'user.email', 'profile-summary-cards-bot@example.com']);
+    await execCmd('git', ['config', '--local', 'user.name', 'profile-summary-cards[bot]']);
     await execCmd('git', ['add', OUTPUT_PATH]);
-    await execCmd('git', ['commit', '-m', 'Generate profile summary cards']);
+    try {
+        await execCmd('git', ['commit', '-m', 'Generate profile summary cards']);
+    } catch (e: any) {
+        if (e?.message?.includes('nothing to commit')) {
+            return;
+        }
+        throw e;
+    }
     await execCmd('git', ['push']);
 };
 
@@ -41,7 +52,12 @@ const action = async () => {
     core.info(`Username: ${username}`);
     const utcOffset = Number(core.getInput('UTC_OFFSET', {required: false}));
     core.info(`UTC offset: ${utcOffset}`);
-    const exclude = core.getInput('EXCLUDE', {required: false}).split(',');
+    const exclude: string[] = core
+        .getInput('EXCLUDE', {required: false})
+        .split(',')
+        .map((s: string) => s.trim())
+        .filter((s: string) => s.length > 0)
+        .map((val: string) => translateLanguage(val).toLowerCase());
     core.info(`Excluded languages: ${exclude}`);
     const autoPush = core.getBooleanInput('AUTO_PUSH', {required: false});
     core.info(`You ${autoPush ? 'have' : "haven't"} set automatically push commits`);
@@ -49,7 +65,7 @@ const action = async () => {
     try {
         // Remove old output
         core.info(`Remove old cards...`);
-        await execCmd('sudo', ['rm', '-rf', OUTPUT_PATH]);
+    await execCmd('rm', ['-rf', OUTPUT_PATH]);
 
         // ProfileDetailsCard
         try {
@@ -143,10 +159,14 @@ if (process.argv.length == 2) {
     const utcOffset = Number(process.argv[3]);
     const exclude: Array<string> = [];
     if (process.argv[4]) {
-        process.argv[4].split(',').forEach(function (val) {
-            const translatedLanguage = translateLanguage(val);
-            exclude.push(translatedLanguage.toLowerCase());
-        });
+        process.argv[4]
+            .split(',')
+            .map((s: string) => s.trim())
+            .filter((s: string) => s.length > 0)
+            .forEach(function (val: string) {
+                const translatedLanguage = translateLanguage(val);
+                exclude.push(translatedLanguage.toLowerCase());
+            });
     }
     main(username, utcOffset, exclude);
 }

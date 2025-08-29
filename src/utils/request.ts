@@ -10,16 +10,27 @@ export default function request(header: any, data: any): AxiosPromise<any> {
         method: 'post',
         headers: header,
         data: data,
+        timeout: 10000, // avoid hanging requests
         raxConfig: {
-            retry: 10,
-            noResponseRetries: 3,
+            retry: 5,
+            noResponseRetries: 2,
             retryDelay: 1000,
-            backoffType: 'linear',
+            backoffType: 'exponential',
             httpMethodsToRetry: ['POST'],
-            onRetryAttempt: err => {
+            // Retry on 5xx, 429, and informational/transient ranges
+            statusCodesToRetry: [
+                [100, 199],
+                [429, 429],
+                [500, 599]
+            ],
+            onRetryAttempt: (err: any) => {
                 const cfg = rax.getConfig(err);
-                core.warning(err);
-                core.warning(`Retry attempt #${cfg?.currentRetryAttempt}`);
+                // Avoid logging sensitive headers/tokens
+                core.warning(
+                    `GitHub API request failed: ${err?.response?.status || ''} ${err?.message || ''}. Retry #${
+                        cfg?.currentRetryAttempt || 0
+                    }`
+                );
             }
         }
     });
