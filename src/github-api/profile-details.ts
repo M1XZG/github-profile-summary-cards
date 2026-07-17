@@ -1,4 +1,6 @@
 import request from '../utils/request';
+import * as core from '@actions/core';
+import {getMonthlyWindows, TimeWindow} from '../utils/date-windows';
 
 export class ProfileDetails {
     id: number; // user id
@@ -61,18 +63,7 @@ const fetcher = (token: string, variables: any) => {
               }
             }
             contributionsCollection {
-                contributionCalendar {
-                    weeks {
-                        contributionDays {
-                            contributionCount
-                            date
-                        }
-                    }
-                }
                 contributionYears
-            }
-            repositoriesContributedTo(first: 1,includeUserRepositories:true, privacy:PUBLIC, contributionTypes: [COMMIT, ISSUE, PULL_REQUEST, REPOSITORY]) {
-                totalCount
             }
             pullRequests(first: 1) {
                 totalCount
@@ -83,6 +74,58 @@ const fetcher = (token: string, variables: any) => {
         }
       }
 
+      `,
+            variables
+        }
+    );
+};
+
+// repositoriesContributedTo.totalCount is extremely expensive server-side and
+// times out (502/504) for very active accounts even on its own, so fetch it in
+// isolation and treat failure as best-effort (the card still renders without it).
+const repositoriesContributedToFetcher = (token: string, variables: any) => {
+    return request(
+        {
+            Authorization: `bearer ${token}`
+        },
+        {
+            query: `
+      query UserContributedTo($login: String!) {
+        user(login: $login) {
+            repositoriesContributedTo(first: 1,includeUserRepositories:true, privacy:PUBLIC, contributionTypes: [COMMIT, ISSUE, PULL_REQUEST, REPOSITORY]) {
+                totalCount
+            }
+        }
+      }
+      `,
+            variables
+        }
+    );
+};
+
+// The daily contribution calendar is the part that times out (502/504) for very
+// active accounts. Fetch it one calendar month at a time.
+const calendarFetcher = (token: string, variables: any, window: TimeWindow) => {
+    return request(
+        {
+            Authorization: `bearer ${token}`
+        },
+        {
+            query: `
+      query UserCalendar($login: String!) {
+        user(login: $login) {
+            contributionsCollection(from: "${window.since}", to: "${window.until}") {
+                contributionCalendar {
+                    weeks {
+                        contributionDays {
+                            contributionCount
+                            date
+                        }
+                    }
+                }
+            }
+        }
+      }
       `,
             variables
         }
@@ -110,18 +153,53 @@ export async function getProfileDetails(username: string): Promise<ProfileDetail
     profileDetails.websiteUrl = user.websiteUrl;
     profileDetails.totalIssueContributions = user.issues.totalCount;
     profileDetails.totalPullRequestContributions = user.pullRequests.totalCount;
-    profileDetails.totalRepositoryContributions = user.repositoriesContributedTo.totalCount;
     profileDetails.company = user.company;
     profileDetails.location = user.location;
     profileDetails.twitterUsername = user.twitterUsername;
     profileDetails.contributionYears = user.contributionsCollection.contributionYears;
 
-    // contributions into array
-    for (const week of user.contributionsCollection.contributionCalendar.weeks) {
-        for (const day of week.contributionDays) {
-            profileDetails.contributions.push(new ProfileContribution(new Date(day.date), day.contributionCount));
+    // Best-effort: this count times out for very active accounts. Don't let it
+    // sink the whole card; fall back to 0 if GitHub can't compute it in time.
+    try {
+        const contributedRes = await repositoriesContributedToFetcher(process.env.GITHUB_TOKEN!, {
+            login: username
+        });
+        if (contributedRes.data.errors) {
+            throw Error(contributedRes.data.errors[0].message || 'repositoriesContributedTo failed');
+        }
+        profileDetails.totalRepositoryContributions =
+            contributedRes.data.data.user.repositoriesContributedTo.totalCount;
+    } catch (error: any) {
+        core.warning(
+            `Could not fetch repositoriesContributedTo (too expensive for this account); defaulting to 0. ${
+                error?.message || ''
+            }`
+        );
+        profileDetails.totalRepositoryContributions = 0;
+    }
+
+    // Fetch the daily calendar month by month and dedupe days by date, since
+    // adjacent monthly windows can share boundary days.
+    const until = new Date();
+    const since = new Date();
+    since.setFullYear(since.getFullYear() - 1);
+    const dayMap = new Map<string, number>();
+    for (const window of getMonthlyWindows(since, until)) {
+        const calRes = await calendarFetcher(process.env.GITHUB_TOKEN!, {login: username}, window);
+        if (calRes.data.errors) {
+            throw Error(calRes.data.errors[0].message || 'GetProfileDetails failed');
+        }
+        for (const week of calRes.data.data.user.contributionsCollection.contributionCalendar.weeks) {
+            for (const day of week.contributionDays) {
+                dayMap.set(day.date, day.contributionCount);
+            }
         }
     }
+    Array.from(dayMap.keys())
+        .sort()
+        .forEach(date => {
+            profileDetails.contributions.push(new ProfileContribution(new Date(date), dayMap.get(date)!));
+        });
 
     return profileDetails;
 }
